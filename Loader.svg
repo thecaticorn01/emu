@@ -1,0 +1,368 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><foreignObject width="100%" height="100%"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><script><![CDATA[
+(function () {
+  var XHTML_NS = 'http://www.w3.org/1999/xhtml';
+  var createElementNS = document.createElementNS.bind(document);
+
+  function getHtmlRoot() {
+    var fo = document.querySelector('foreignObject');
+    return (fo && fo.firstElementChild) || document.querySelector('html') || document.documentElement;
+  }
+
+  Object.defineProperty(document, 'head', {
+    get: function () {
+      var r = getHtmlRoot();
+      return (r && r.querySelector('head')) || document.querySelector('head');
+    },
+    configurable: true
+  });
+  Object.defineProperty(document, 'body', {
+    get: function () {
+      var r = getHtmlRoot();
+      return (r && r.querySelector('body')) || document.querySelector('body');
+    },
+    configurable: true
+  });
+  Object.defineProperty(document, 'documentElement', {
+    get: function () { return getHtmlRoot(); },
+    configurable: true
+  });
+
+  document.createElement = function (tagName, options) {
+    return createElementNS(XHTML_NS, String(tagName).toLowerCase(), options);
+  };
+
+  // Shim innerHTML in XMLDocument so non-XML HTML strings (like unclosed <input> or <br>
+  // in EmulatorJS) are parsed via HTML5 DOMParser instead of throwing XML SyntaxErrors.
+  var innerHTMLDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  if (innerHTMLDesc && innerHTMLDesc.set) {
+    Object.defineProperty(Element.prototype, 'innerHTML', {
+      get: innerHTMLDesc.get,
+      set: function (html) {
+        try {
+          innerHTMLDesc.set.call(this, html);
+        } catch (e) {
+          while (this.firstChild) this.removeChild(this.firstChild);
+          var parsed = new DOMParser().parseFromString('<!DOCTYPE html><html><body>' + html + '</body></html>', 'text/html');
+          var body = parsed.body;
+          while (body && body.firstChild) {
+            this.appendChild(document.importNode(body.firstChild, true));
+          }
+        }
+      },
+      configurable: true
+    });
+  }
+})();
+]]></script>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Home - Classroom</title>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+<script><![CDATA[
+(function () {
+  var OWNER = 'thecaticorn01';
+  var REPO = 'emu';
+  var BRANCH = 'main';
+  var TREE_API_URL = 'https://api.github.com/repos/' + OWNER + '/' + REPO + '/git/trees/' + BRANCH + '?recursive=1';
+  var RAW_BASE_URL = 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/refs/heads/' + BRANCH + '/';
+
+  var headEl = document.head || document.getElementsByTagName('head')[0];
+  var bodyEl = document.body || document.getElementsByTagName('body')[0];
+
+  var style = document.createElement('style');
+  style.textContent = [
+    '* { box-sizing: border-box; }',
+    'html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }',
+    'body { display: flex; align-items: center; justify-content: center; }',
+    '.card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 28px; width: 90%; max-width: 440px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }',
+    '.title { margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 600; color: #f1f5f9; }',
+    '.subtitle { margin: 0 0 18px 0; font-size: 0.875rem; color: #94a3b8; }',
+    'select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569; background-color: #0f172a; color: #f8fafc; font-size: 0.95rem; outline: none; cursor: pointer; transition: border-color 0.15s ease; }',
+    'select:focus { border-color: #38bdf8; }',
+    'select:disabled { opacity: 0.6; cursor: not-allowed; }',
+    '.mode-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 0.85rem; color: #cbd5e1; cursor: pointer; user-select: none; }',
+    '.mode-row input { accent-color: #38bdf8; width: 16px; height: 16px; cursor: pointer; }',
+    '.hidden { display: none !important; }',
+    '.progress-track { width: 100%; height: 10px; background-color: #0f172a; border-radius: 999px; overflow: hidden; margin: 16px 0 10px 0; border: 1px solid #334155; }',
+    '.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #0284c7, #38bdf8); transition: width 0.08s linear; }',
+    '.progress-meta { display: flex; justify-content: space-between; font-size: 0.8rem; color: #94a3b8; font-variant-numeric: tabular-nums; }',
+    '.error-msg { margin-top: 12px; font-size: 0.85rem; color: #f87171; }',
+    '.btn { margin-top: 14px; width: 100%; padding: 10px 14px; border-radius: 8px; border: none; background: #0284c7; color: #fff; font-weight: 600; font-size: 0.9rem; cursor: pointer; }',
+    '.btn:hover { background: #0369a1; }',
+    '#game-frame { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; border: 0; margin: 0; padding: 0; z-index: 9999; background: #000; }'
+  ].join('\n');
+  headEl.appendChild(style);
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  var menuView = el('div', 'card');
+  var menuTitle = el('h2', 'title', 'Select File');
+  var menuSubtitle = el('p', 'subtitle', 'Fetching HTML files from repository...');
+  var dropdown = el('select');
+  dropdown.disabled = true;
+  var loadingOpt = el('option', '', 'Loading file list...');
+  loadingOpt.value = '';
+  dropdown.appendChild(loadingOpt);
+
+  var modeLabel = el('label', 'mode-row');
+  var aboutBlankCheckbox = el('input');
+  aboutBlankCheckbox.type = 'checkbox';
+  aboutBlankCheckbox.checked = true;
+  var modeText = el('span', '', 'Launch in new about:blank tab (uncheck to run inside this tab)');
+  modeLabel.appendChild(aboutBlankCheckbox);
+  modeLabel.appendChild(modeText);
+
+  var menuError = el('div', 'error-msg hidden');
+  menuView.appendChild(menuTitle);
+  menuView.appendChild(menuSubtitle);
+  menuView.appendChild(dropdown);
+  menuView.appendChild(modeLabel);
+  menuView.appendChild(menuError);
+
+  var loaderView = el('div', 'card hidden');
+  var loaderTitle = el('h2', 'title', 'Loading...');
+  var loaderStage = el('p', 'subtitle', 'Connecting to GitHub...');
+  var progressTrack = el('div', 'progress-track');
+  var progressBar = el('div', 'progress-fill');
+  progressTrack.appendChild(progressBar);
+  var progressMeta = el('div', 'progress-meta');
+  var progressBytes = el('span', '', '0 B');
+  var progressPct = el('span', '', '0%');
+  progressMeta.appendChild(progressBytes);
+  progressMeta.appendChild(progressPct);
+  var backBtn = el('button', 'btn hidden', 'Choose Another File');
+  loaderView.appendChild(loaderTitle);
+  loaderView.appendChild(loaderStage);
+  loaderView.appendChild(progressTrack);
+  loaderView.appendChild(progressMeta);
+  loaderView.appendChild(backBtn);
+
+  bodyEl.appendChild(menuView);
+  bodyEl.appendChild(loaderView);
+
+  backBtn.addEventListener('click', function () {
+    loaderView.classList.add('hidden');
+    backBtn.classList.add('hidden');
+    menuView.classList.remove('hidden');
+    dropdown.value = '';
+  });
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  function updateProgress(loaded, total, stageText, popupWin) {
+    if (stageText) loaderStage.textContent = stageText;
+    var pctStr = '';
+    var bytesStr = '';
+    var widthStr = '100%';
+
+    if (total > 0) {
+      var effectiveTotal = Math.max(loaded, total);
+      var pct = Math.min(100, Math.round((loaded / effectiveTotal) * 100));
+      widthStr = pct + '%';
+      pctStr = pct + '%';
+      bytesStr = formatBytes(loaded) + ' / ' + formatBytes(effectiveTotal);
+    } else {
+      bytesStr = formatBytes(loaded);
+    }
+
+    progressBar.style.width = widthStr;
+    progressPct.textContent = pctStr;
+    progressBytes.textContent = bytesStr;
+
+    // Also update the loading bar inside the about:blank window if open
+    if (popupWin && !popupWin.closed && popupWin.document) {
+      try {
+        var pBar = popupWin.document.getElementById('ab-bar');
+        var pBytes = popupWin.document.getElementById('ab-bytes');
+        var pPct = popupWin.document.getElementById('ab-pct');
+        var pStage = popupWin.document.getElementById('ab-stage');
+        if (pBar) pBar.style.width = widthStr;
+        if (pBytes) pBytes.textContent = bytesStr;
+        if (pPct) pPct.textContent = pctStr;
+        if (pStage && stageText) pStage.textContent = stageText;
+      } catch (e) {}
+    }
+  }
+
+  function initAboutBlankLoader(popupWin, fileName) {
+    if (!popupWin || popupWin.closed) return;
+    var doc = popupWin.document;
+    doc.open();
+    doc.write(
+      '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Loading ' + fileName + '...</title>' +
+      '<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif}.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:28px;width:90%;max-width:420px;box-shadow:0 20px 25px -5px rgba(0,0,0,.5)}h2{margin:0 0 8px 0;font-size:1.25rem;color:#f1f5f9}p{margin:0 0 18px 0;font-size:.875rem;color:#94a3b8}.track{width:100%;height:10px;background:#0f172a;border-radius:999px;overflow:hidden;margin:16px 0 10px 0;border:1px solid #334155}.fill{height:100%;width:0%;background:linear-gradient(90deg,#0284c7,#38bdf8);transition:width .08s linear}.meta{display:flex;justify-content:space-between;font-size:.8rem;color:#94a3b8;font-variant-numeric:tabular-nums}</style>' +
+      '</head><body><div class="card"><h2>Loading ' + fileName + '</h2><p id="ab-stage">Requesting file from GitHub...</p>' +
+      '<div class="track"><div class="fill" id="ab-bar"></div></div>' +
+      '<div class="meta"><span id="ab-bytes">0 B</span><span id="ab-pct">0%</span></div></div></body></html>'
+    );
+    doc.close();
+  }
+
+  async function populateDropdown() {
+    try {
+      var res = await fetch(TREE_API_URL);
+      if (!res.ok) throw new Error('GitHub API returned HTTP ' + res.status);
+      var data = await res.json();
+
+      var htmlFiles = (data.tree || []).filter(function (item) {
+        return item.type === 'blob' && /\.html$/i.test(item.path);
+      });
+
+      while (dropdown.firstChild) dropdown.removeChild(dropdown.firstChild);
+
+      if (htmlFiles.length === 0) {
+        var emptyOpt = el('option', '', 'No HTML files found');
+        emptyOpt.value = '';
+        dropdown.appendChild(emptyOpt);
+        menuSubtitle.textContent = 'No .html files exist in this repository.';
+        return;
+      }
+
+      var defaultOpt = el('option', '', '-- Choose an HTML file (' + htmlFiles.length + ' available) --');
+      defaultOpt.value = '';
+      dropdown.appendChild(defaultOpt);
+
+      htmlFiles.forEach(function (file) {
+        var opt = el('option', '', file.path);
+        opt.value = file.path;
+        opt.setAttribute('data-size', file.size || 0);
+        dropdown.appendChild(opt);
+      });
+
+      dropdown.disabled = false;
+      menuSubtitle.textContent = 'Choose a file below to launch it.';
+    } catch (err) {
+      menuError.textContent = 'Failed to load repository file list: ' + err.message;
+      menuError.classList.remove('hidden');
+    }
+  }
+
+  dropdown.addEventListener('change', function () {
+    var selectedOpt = dropdown.options[dropdown.selectedIndex];
+    if (!selectedOpt || !selectedOpt.value) return;
+    var path = selectedOpt.value;
+    var expectedSize = parseInt(selectedOpt.getAttribute('data-size'), 10) || 0;
+    var fileName = path.split('/').pop();
+
+    // Open about:blank synchronously inside the user's change gesture so popup blockers allow it
+    var popupWin = null;
+    if (aboutBlankCheckbox.checked) {
+      popupWin = window.open('about:blank', '_blank');
+      if (popupWin) {
+        initAboutBlankLoader(popupWin, fileName);
+      }
+    }
+
+    loadAndLaunchHTML(path, expectedSize, popupWin);
+  });
+
+  async function fetchWithRealProgress(url, apiUncompressedSize, popupWin) {
+    var res = await fetch(url, { cache: 'reload' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    var contentLength = parseInt(res.headers.get('Content-Length'), 10);
+    var total = apiUncompressedSize > 0
+      ? apiUncompressedSize
+      : ((!isNaN(contentLength) && contentLength > 0) ? contentLength : 0);
+
+    if (!res.body || !res.body.getReader) {
+      var text = await res.text();
+      updateProgress(text.length, text.length, 'Download complete', popupWin);
+      return text;
+    }
+
+    var reader = res.body.getReader();
+    var chunks = [];
+    var receivedLength = 0;
+
+    while (true) {
+      var step = await reader.read();
+      if (step.done) break;
+      chunks.push(step.value);
+      receivedLength += step.value.byteLength;
+      if (total > 0 && receivedLength > total) {
+        total = receivedLength;
+      }
+      updateProgress(receivedLength, total, 'Downloading HTML payload...', popupWin);
+    }
+
+    var combined = new Uint8Array(receivedLength);
+    var position = 0;
+    for (var i = 0; i < chunks.length; i++) {
+      combined.set(chunks[i], position);
+      position += chunks[i].byteLength;
+    }
+
+    updateProgress(receivedLength, receivedLength, 'Launching HTML document...', popupWin);
+    return new TextDecoder('utf-8').decode(combined);
+  }
+
+  async function loadAndLaunchHTML(filePath, expectedSize, popupWin) {
+    var fileName = filePath.split('/').pop();
+    menuView.classList.add('hidden');
+    backBtn.classList.add('hidden');
+    loaderView.classList.remove('hidden');
+    loaderTitle.textContent = 'Loading ' + fileName;
+    updateProgress(0, expectedSize, 'Requesting file from GitHub...', popupWin);
+
+    var encodedPath = filePath.split('/').map(encodeURIComponent).join('/');
+    var targetUrl = RAW_BASE_URL + encodedPath;
+
+    try {
+      var htmlText = await fetchWithRealProgress(targetUrl, expectedSize, popupWin);
+
+      await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+
+      // 1. If the user chose about:blank and the tab is open, write the HTML directly into it
+      if (popupWin && !popupWin.closed) {
+        popupWin.document.open();
+        popupWin.document.write(htmlText);
+        popupWin.document.close();
+        loaderStage.textContent = 'Launched in about:blank tab!';
+        backBtn.classList.remove('hidden');
+        return;
+      }
+
+      // 2. Otherwise (or if popup was blocked), render inside a fullscreen HTML iframe
+      // inside this SVG so the game still gets a genuine HTMLDocument (not XMLDocument).
+      var iframe = document.createElement('iframe');
+      iframe.id = 'game-frame';
+      iframe.setAttribute('allowfullscreen', 'true');
+      iframe.setAttribute('allow', 'autoplay; fullscreen; gamepad');
+      bodyEl.appendChild(iframe);
+
+      var iframeDoc = iframe.contentWindow && iframe.contentWindow.document;
+      if (iframeDoc) {
+        iframeDoc.open();
+        iframeDoc.write(htmlText);
+        iframeDoc.close();
+      } else {
+        var blob = new Blob([htmlText], { type: 'text/html' });
+        iframe.src = URL.createObjectURL(blob);
+      }
+      loaderView.classList.add('hidden');
+    } catch (e) {
+      if (popupWin && !popupWin.closed) {
+        try { popupWin.close(); } catch (err) {}
+      }
+      loaderView.classList.add('hidden');
+      menuView.classList.remove('hidden');
+      dropdown.value = '';
+      menuError.textContent = 'Error loading ' + filePath + ': ' + e.message;
+      menuError.classList.remove('hidden');
+    }
+  }
+
+  populateDropdown();
+})();
+]]></script></body></html></foreignObject></svg>
