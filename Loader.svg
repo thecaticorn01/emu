@@ -84,6 +84,8 @@
     '.mode-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 0.85rem; color: #cbd5e1; cursor: pointer; user-select: none; }',
     '.mode-row input { accent-color: #38bdf8; width: 16px; height: 16px; cursor: pointer; }',
     '.hidden { display: none !important; }',
+    'input.pw { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569; background-color: #0f172a; color: #f8fafc; font-size: 0.95rem; outline: none; transition: border-color 0.15s ease; }',
+    'input.pw:focus { border-color: #38bdf8; }',
     '.progress-track { width: 100%; height: 10px; background-color: #0f172a; border-radius: 999px; overflow: hidden; margin: 16px 0 10px 0; border: 1px solid #334155; }',
     '.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #0284c7, #38bdf8); transition: width 0.08s linear; }',
     '.progress-meta { display: flex; justify-content: space-between; font-size: 0.8rem; color: #94a3b8; font-variant-numeric: tabular-nums; }',
@@ -101,7 +103,24 @@
     return node;
   }
 
-  var menuView = el('div', 'card');
+  var PASSWORD = 'P@ssw0rd!';
+
+  var gateView = el('div', 'card');
+  var gateTitle = el('h2', 'title', 'Password Required');
+  var gateSubtitle = el('p', 'subtitle', 'Enter the password to continue.');
+  var gateInput = el('input', 'pw');
+  gateInput.type = 'password';
+  gateInput.setAttribute('placeholder', 'Password');
+  gateInput.setAttribute('autocomplete', 'off');
+  var gateError = el('div', 'error-msg hidden', 'Incorrect password.');
+  var gateBtn = el('button', 'btn', 'Unlock');
+  gateView.appendChild(gateTitle);
+  gateView.appendChild(gateSubtitle);
+  gateView.appendChild(gateInput);
+  gateView.appendChild(gateError);
+  gateView.appendChild(gateBtn);
+
+  var menuView = el('div', 'card hidden');
   var menuTitle = el('h2', 'title', 'Select File');
   var menuSubtitle = el('p', 'subtitle', 'Fetching HTML files from repository...');
   var dropdown = el('select');
@@ -143,8 +162,28 @@
   loaderView.appendChild(progressMeta);
   loaderView.appendChild(backBtn);
 
+  bodyEl.appendChild(gateView);
   bodyEl.appendChild(menuView);
   bodyEl.appendChild(loaderView);
+
+  var unlocked = false;
+  function tryUnlock() {
+    if (unlocked) return;
+    if (gateInput.value === PASSWORD) {
+      unlocked = true;
+      gateView.classList.add('hidden');
+      menuView.classList.remove('hidden');
+      populateDropdown();
+    } else {
+      gateError.classList.remove('hidden');
+      gateInput.value = '';
+      gateInput.focus();
+    }
+  }
+  gateBtn.addEventListener('click', tryUnlock);
+  gateInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') tryUnlock();
+  });
 
   backBtn.addEventListener('click', function () {
     loaderView.classList.add('hidden');
@@ -363,6 +402,6 @@
     }
   }
 
-  populateDropdown();
+  gateInput.focus();
 })();
 ]]></script></body></html></foreignObject></svg>
