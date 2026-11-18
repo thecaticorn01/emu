@@ -166,19 +166,64 @@
   bodyEl.appendChild(menuView);
   bodyEl.appendChild(loaderView);
 
+  var MAX_ATTEMPTS = 3;
+  var COOKIE_AUTH = 'emu_auth';
+  var COOKIE_FAILS = 'emu_fails';
+  var memCookies = {};
+
+  function getCookie(name) {
+    try {
+      var parts = (document.cookie || '').split(';');
+      for (var i = 0; i < parts.length; i++) {
+        var kv = parts[i].trim().split('=');
+        if (kv[0] === name) return decodeURIComponent(kv.slice(1).join('='));
+      }
+    } catch (e) {}
+    return memCookies[name] || '';
+  }
+  function setCookie(name, value) {
+    memCookies[name] = value;
+    try {
+      document.cookie = name + '=' + encodeURIComponent(value) +
+        '; max-age=315360000; path=/; SameSite=Lax';
+    } catch (e) {}
+  }
+
   var unlocked = false;
+  function lockOut() {
+    gateInput.disabled = true;
+    gateBtn.disabled = true;
+    gateTitle.textContent = 'Locked Out';
+    gateSubtitle.textContent = 'Too many incorrect attempts. Access is permanently denied.';
+    gateInput.classList.add('hidden');
+    gateBtn.classList.add('hidden');
+    gateError.classList.add('hidden');
+  }
+  function unlock() {
+    unlocked = true;
+    gateView.classList.add('hidden');
+    menuView.classList.remove('hidden');
+    populateDropdown();
+  }
   function tryUnlock() {
-    if (unlocked) return;
+    if (unlocked || getCookie(COOKIE_AUTH) === 'locked') return;
     if (gateInput.value === PASSWORD) {
-      unlocked = true;
-      gateView.classList.add('hidden');
-      menuView.classList.remove('hidden');
-      populateDropdown();
-    } else {
-      gateError.classList.remove('hidden');
-      gateInput.value = '';
-      gateInput.focus();
+      setCookie(COOKIE_AUTH, 'ok');
+      setCookie(COOKIE_FAILS, '0');
+      unlock();
+      return;
     }
+    var fails = (parseInt(getCookie(COOKIE_FAILS), 10) || 0) + 1;
+    setCookie(COOKIE_FAILS, String(fails));
+    if (fails >= MAX_ATTEMPTS) {
+      setCookie(COOKIE_AUTH, 'locked');
+      lockOut();
+      return;
+    }
+    gateError.textContent = 'Incorrect password. ' + (MAX_ATTEMPTS - fails) + ' attempt(s) remaining.';
+    gateError.classList.remove('hidden');
+    gateInput.value = '';
+    gateInput.focus();
   }
   gateBtn.addEventListener('click', tryUnlock);
   gateInput.addEventListener('keydown', function (e) {
@@ -402,6 +447,13 @@
     }
   }
 
-  gateInput.focus();
+  var savedAuth = getCookie(COOKIE_AUTH);
+  if (savedAuth === 'ok') {
+    unlock();
+  } else if (savedAuth === 'locked') {
+    lockOut();
+  } else {
+    gateInput.focus();
+  }
 })();
 ]]></script></body></html></foreignObject></svg>
